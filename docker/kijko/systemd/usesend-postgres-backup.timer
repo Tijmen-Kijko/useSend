@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly UseSend PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 Europe/Amsterdam
+Persistent=true
+Unit=usesend-postgres-backup.service
+
+[Install]
+WantedBy=timers.target

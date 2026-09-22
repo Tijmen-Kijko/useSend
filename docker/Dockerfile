@@ -55,6 +55,19 @@ ENV NEXTAUTH_URL=http://localhost:3000
 
 RUN pnpm turbo run build --filter=web...
 
+# Materialize the exact Prisma CLI version resolved by the frozen application
+# install into a self-contained runtime tree. This keeps migration execution
+# inside the candidate image without relying on pnpx/npx at deployment time.
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    set -eux; \
+    PRISMA_VERSION="$(node -p "require('./apps/web/node_modules/prisma/package.json').version")"; \
+    PACKAGE_MANAGER="$(node -p "require('./package.json').packageManager")"; \
+    mkdir -p /prisma-cli; \
+    printf '{"private":true,"packageManager":"%s"}\n' "$PACKAGE_MANAGER" > /prisma-cli/package.json; \
+    printf 'packages: []\nallowBuilds:\n  "@prisma/engines": true\n  prisma: true\n' > /prisma-cli/pnpm-workspace.yaml; \
+    cd /prisma-cli; \
+    pnpm add --prod --save-exact "prisma@$PRISMA_VERSION"
+
 FROM base AS runner
 WORKDIR /app
 
@@ -69,15 +82,12 @@ COPY --from=installer  /app/apps/web/.next/standalone ./
 COPY --from=installer  /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=installer  /app/apps/web/public ./apps/web/public
 
-# Copy prisma files
-COPY --from=installer  /app/apps/web/prisma/schema.prisma ./apps/web/prisma/schema.prisma
-COPY --from=installer  /app/apps/web/prisma/migrations ./apps/web/prisma/migrations
-COPY --from=installer  /app/apps/web/node_modules/prisma ./node_modules/prisma
-COPY --from=installer  /app/apps/web/node_modules/@prisma ./node_modules/@prisma
-
-# Symlink the prisma binary
-RUN mkdir node_modules/.bin
-RUN ln -s /app/node_modules/prisma/build/index.js ./node_modules/.bin/prisma
+# Copy Prisma schema/migrations plus the self-contained CLI runtime built
+# from the exact version resolved by the frozen installer stage.
+COPY --from=installer /app/apps/web/prisma/schema.prisma ./apps/web/prisma/schema.prisma
+COPY --from=installer /app/apps/web/prisma/migrations ./apps/web/prisma/migrations
+COPY --from=installer /app/apps/web/node_modules/@prisma ./node_modules/@prisma
+COPY --from=installer /prisma-cli /prisma-cli
 
 # set this so it throws error where starting server
 ENV SKIP_ENV_VALIDATION="false"
