@@ -1,0 +1,132 @@
+name: usesend-kijko-prod
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:?Set POSTGRES_IMAGE to a pinned Postgres image}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+    volumes:
+      - type: bind
+        source: ${USESEND_DATA_ROOT:-/home/usesend-data}/postgres
+        target: /var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    cpus: ${POSTGRES_CPU_LIMIT:-2}
+    mem_limit: ${POSTGRES_MEMORY_LIMIT:-4g}
+    pids_limit: 512
+    logging: *default-logging
+
+  redis:
+    image: ${REDIS_IMAGE:?Set REDIS_IMAGE to a pinned Redis image}
+    restart: unless-stopped
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--appendfsync",
+        "everysec",
+        "--maxmemory-policy",
+        "noeviction",
+      ]
+    volumes:
+      - type: bind
+        source: ${USESEND_DATA_ROOT:-/home/usesend-data}/redis
+        target: /data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    cpus: ${REDIS_CPU_LIMIT:-1}
+    mem_limit: ${REDIS_MEMORY_LIMIT:-2g}
+    pids_limit: 256
+    logging: *default-logging
+
+  usesend:
+    image: ${USESEND_IMAGE:?Set USESEND_IMAGE to an immutable UseSend image}
+    restart: unless-stopped
+    init: true
+    ports:
+      - "127.0.0.1:${USESEND_BIND_PORT:-3400}:3000"
+    environment:
+      HOSTNAME: "0.0.0.0"
+      PORT: "3000"
+
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+      REDIS_URL: ${REDIS_URL:?Set REDIS_URL}
+      REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-usesend:}
+
+      NEXTAUTH_URL: ${NEXTAUTH_URL:?Set NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET}
+      NEXT_PUBLIC_IS_CLOUD: "false"
+
+      GITHUB_ID: ${GITHUB_ID:?Set GITHUB_ID}
+      GITHUB_SECRET: ${GITHUB_SECRET:?Set GITHUB_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Set ADMIN_EMAIL}
+      SELF_HOSTED_ALLOWED_EMAILS: ${SELF_HOSTED_ALLOWED_EMAILS:?Set SELF_HOSTED_ALLOWED_EMAILS}
+
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:?Set AWS_DEFAULT_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?Set AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?Set AWS_SECRET_ACCESS_KEY}
+
+      API_RATE_LIMIT: ${API_RATE_LIMIT:-10}
+      AUTH_EMAIL_RATE_LIMIT: ${AUTH_EMAIL_RATE_LIMIT:-5}
+      EMAIL_CLEANUP_DAYS: ${EMAIL_CLEANUP_DAYS:-30}
+
+      S3_COMPATIBLE_ACCESS_KEY: ${S3_COMPATIBLE_ACCESS_KEY:-}
+      S3_COMPATIBLE_SECRET_KEY: ${S3_COMPATIBLE_SECRET_KEY:-}
+      S3_COMPATIBLE_API_URL: ${S3_COMPATIBLE_API_URL:-}
+      S3_COMPATIBLE_PUBLIC_URL: ${S3_COMPATIBLE_PUBLIC_URL:-}
+      S3_COMPATIBLE_BUCKET: ${S3_COMPATIBLE_BUCKET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+      - edge
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    cpus: ${USESEND_CPU_LIMIT:-4}
+    mem_limit: ${USESEND_MEMORY_LIMIT:-4g}
+    pids_limit: 1024
+    logging: *default-logging
+
+networks:
+  backend:
+    internal: true
+  edge:
