@@ -3,6 +3,7 @@ import {
   CreateTopicCommand,
   SubscribeCommand,
   DeleteTopicCommand,
+  ConfirmSubscriptionCommand,
 } from "@aws-sdk/client-sns";
 import { env } from "~/env";
 import { getAwsCredentialOptions } from "~/server/aws/credentials";
@@ -43,5 +44,20 @@ export async function subscribeEndpoint(
   const client = getSnsClient(region);
 
   const data = await client.send(subscribeCommand);
+  return data.SubscriptionArn;
+}
+
+export async function confirmSubscription(
+  topicArn: string,
+  token: string,
+  region: string,
+) {
+  const client = getSnsClient(region);
+  const data = await client.send(
+    new ConfirmSubscriptionCommand({
+      TopicArn: topicArn,
+      Token: token,
+    }),
+  );
   return data.SubscriptionArn;
 }

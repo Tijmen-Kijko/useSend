@@ -3,12 +3,14 @@ export interface SnsNotificationMessage {
   MessageId: string;
   TopicArn: string;
   Subject?: string;
+  Token?: string;
+  SubscribeURL?: string;
   Message: string; // This is a JSON string that needs to be parsed into one of the SES event types below
   Timestamp: string;
   SignatureVersion: string;
   Signature: string;
   SigningCertURL: string;
-  UnsubscribeURL: string;
+  UnsubscribeURL?: string;
 }
 
 export interface SesMail {
