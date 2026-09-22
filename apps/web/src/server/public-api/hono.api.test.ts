@@ -25,6 +25,24 @@ vi.mock("~/utils/common", () => ({
 
 import { getApp } from "~/server/public-api/hono";
 
+function fullTeam() {
+  return {
+    id: 1,
+    apiRateLimit: 2,
+    apiKeyId: 11,
+    apiKey: { domainId: null, permission: "FULL" },
+  };
+}
+
+function sendingTeam() {
+  return {
+    id: 1,
+    apiRateLimit: 2,
+    apiKeyId: 11,
+    apiKey: { domainId: null, permission: "SENDING" },
+  };
+}
+
 describe("public API Hono middleware", () => {
   beforeEach(() => {
     mockGetTeamFromToken.mockReset();
@@ -34,20 +52,15 @@ describe("public API Hono middleware", () => {
   });
 
   it("applies auth and rate limit headers", async () => {
-    mockGetTeamFromToken.mockResolvedValue({
-      id: 1,
-      apiRateLimit: 2,
-      apiKeyId: 11,
-      apiKey: { domainId: null },
-    });
+    mockGetTeamFromToken.mockResolvedValue(fullTeam());
     mockRedis.incr.mockResolvedValue(1);
     mockRedis.expire.mockResolvedValue(1);
     mockRedis.ttl.mockResolvedValue(1);
 
     const app = getApp();
-    app.get("/v1/ping", (c) => c.json({ ok: true }));
+    app.get("/v1/emails", (c) => c.json({ ok: true }));
 
-    const response = await app.request("http://localhost/api/v1/ping", {
+    const response = await app.request("http://localhost/api/v1/emails", {
       headers: {
         Authorization: "Bearer test-key",
       },
@@ -59,19 +72,14 @@ describe("public API Hono middleware", () => {
   });
 
   it("returns 429 when limit is exceeded", async () => {
-    mockGetTeamFromToken.mockResolvedValue({
-      id: 1,
-      apiRateLimit: 2,
-      apiKeyId: 11,
-      apiKey: { domainId: null },
-    });
+    mockGetTeamFromToken.mockResolvedValue(fullTeam());
     mockRedis.incr.mockResolvedValue(3);
     mockRedis.ttl.mockResolvedValue(1);
 
     const app = getApp();
-    app.get("/v1/ping", (c) => c.json({ ok: true }));
+    app.get("/v1/emails", (c) => c.json({ ok: true }));
 
-    const response = await app.request("http://localhost/api/v1/ping", {
+    const response = await app.request("http://localhost/api/v1/emails", {
       headers: {
         Authorization: "Bearer test-key",
       },
@@ -95,9 +103,9 @@ describe("public API Hono middleware", () => {
     );
 
     const app = getApp();
-    app.get("/v1/ping", (c) => c.json({ ok: true }));
+    app.get("/v1/emails", (c) => c.json({ ok: true }));
 
-    const response = await app.request("http://localhost/api/v1/ping");
+    const response = await app.request("http://localhost/api/v1/emails");
 
     expect(response.status).toBe(401);
     const body = await response.json();
@@ -106,5 +114,63 @@ describe("public API Hono middleware", () => {
         code: "UNAUTHORIZED",
       },
     });
+  });
+
+  it("allows a SENDING key to use email lifecycle endpoints", async () => {
+    mockGetTeamFromToken.mockResolvedValue(sendingTeam());
+    mockRedis.incr.mockResolvedValue(1);
+    mockRedis.expire.mockResolvedValue(1);
+    mockRedis.ttl.mockResolvedValue(1);
+
+    const app = getApp();
+    app.post("/v1/emails", (c) => c.json({ ok: true }));
+
+    const response = await app.request("http://localhost/api/v1/emails", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer sending-key",
+      },
+    });
+
+    expect(response.status).toBe(200);
+  });
+
+  it("denies a SENDING key access to management endpoints", async () => {
+    mockGetTeamFromToken.mockResolvedValue(sendingTeam());
+
+    const app = getApp();
+    app.get("/v1/domains", (c) => c.json({ ok: true }));
+
+    const response = await app.request("http://localhost/api/v1/domains", {
+      headers: {
+        Authorization: "Bearer sending-key",
+      },
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "FORBIDDEN",
+      },
+    });
+    expect(mockRedis.incr).not.toHaveBeenCalled();
+  });
+
+  it("default-denies an unmapped endpoint even for a FULL key", async () => {
+    mockGetTeamFromToken.mockResolvedValue(fullTeam());
+
+    const app = getApp();
+    app.get("/v1/future-admin-endpoint", (c) => c.json({ ok: true }));
+
+    const response = await app.request(
+      "http://localhost/api/v1/future-admin-endpoint",
+      {
+        headers: {
+          Authorization: "Bearer full-key",
+        },
+      },
+    );
+
+    expect(response.status).toBe(403);
   });
 });
