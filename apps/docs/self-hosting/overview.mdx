@@ -16,7 +16,7 @@ useSend depends on AWS SES to send emails and SNS to receive email status. Along
 
 <Steps>
   <Step title="AWS credentials">
-  tl;dr: Login to your AWS console and create a new user with programmatic access. Attach the `AmazonSNSFullAccess` and `AmazonSESFullAccess` policies to the user. Then create a new access key for the user.
+  Create a dedicated IAM principal for useSend. Do not use the AWS root account, administrator credentials, or the broad `AmazonSNSFullAccess` / `AmazonSESFullAccess` managed policies. Grant only the SES, SNS and STS actions useSend actually calls.
 
 Add the following environment variables.
 
@@ -26,9 +26,17 @@ Add the following environment variables.
     ```
 
 <Tip>
-  Follow this for detailed steps: [Create AWS
-  credentials](/get-started/create-aws-credentials)
+  Follow the [least-privilege AWS credential guide](/get-started/create-aws-credentials)
+  for the exact action list and rotation procedure.
 </Tip>
+
+On a non-AWS host such as a VPS, inject the dedicated IAM access key through
+your deployment secret store. If useSend runs on AWS, prefer the AWS SDK default
+credential chain with a workload role instead of static credentials.
+
+Both `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` must be provided
+together. If both are omitted, useSend uses the AWS SDK default credential
+provider chain.
 
   </Step>
   <Step title="GitHub app credentials for login">
@@ -234,6 +242,55 @@ To send emails through the proxy, configure your application with these SMTP set
   production deployments, consider using non-standard ports (2587, 2465) to
   avoid conflicts.
 </Warning>
+
+## Credential lifecycle
+
+Treat the useSend platform credentials and each application's API key as
+separate security boundaries.
+
+### Project API keys
+
+- Create one API key per project and environment. Do not share one global key
+  across applications.
+- Use `SENDING` for normal application keys. Use `FULL` only for trusted
+  administration automation that genuinely needs domains, contacts, campaigns,
+  or analytics APIs.
+- Scope a project key to one sending domain whenever practical.
+- Store the key in the application's secret store; never commit it to Git or
+  bake it into a client-side bundle.
+
+To rotate a project key without downtime:
+
+1. Create a replacement `SENDING` key with the same intended domain scope.
+2. Update the project's secret store and deploy/restart that project.
+3. Send a controlled test email and verify it appears under the replacement
+   key.
+4. Delete the old key in useSend.
+5. Watch application errors and useSend send failures during the observation
+   window.
+
+If a project key is exposed, revoke only that project's key first. Other
+project keys, AWS credentials, and dashboard credentials do not need to change
+unless there is evidence they were exposed too.
+
+### Dashboard and OAuth secrets
+
+`NEXTAUTH_SECRET` and OAuth client secrets belong to the platform deployment,
+not to individual projects. Keep them in the deployment secret store.
+
+- Rotating `NEXTAUTH_SECRET` invalidates existing sessions, so plan a
+  controlled restart and expect administrators to sign in again.
+- Rotate the GitHub/Google OAuth client secret at the identity provider, deploy
+  the replacement, verify login, then revoke the old secret.
+- Keep `ADMIN_EMAIL` and `SELF_HOSTED_ALLOWED_EMAILS` as configuration, not
+  credentials. Changes to them should still be reviewed because they change
+  who can access the dashboard.
+
+### AWS credentials
+
+Use a dedicated least-privilege IAM identity as described in the
+[AWS credential guide](/get-started/create-aws-credentials). AWS credentials
+must never be reused as project API keys.
 
 ## Next steps
 

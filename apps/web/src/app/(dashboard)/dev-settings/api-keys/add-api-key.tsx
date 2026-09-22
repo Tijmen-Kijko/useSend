@@ -15,7 +15,6 @@ import { api } from "~/trpc/react";
 import { useState } from "react";
 import { CheckIcon, ClipboardCopy, Eye, EyeOff, Plus } from "lucide-react";
 import { toast } from "@usesend/ui/src/toaster";
-import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -34,13 +33,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@usesend/ui/src/select";
-
-const apiKeySchema = z.object({
-  name: z.string({ required_error: "Name is required" }).min(1, {
-    message: "Name is required",
-  }),
-  domainId: z.string().optional(),
-});
+import {
+  apiKeySchema,
+  type ApiKeyFormValues,
+  DEFAULT_API_KEY_FORM_VALUES,
+  toCreateApiKeyInput,
+} from "./api-key-form";
 
 export default function AddApiKey() {
   const [open, setOpen] = useState(false);
@@ -53,22 +51,14 @@ export default function AddApiKey() {
 
   const utils = api.useUtils();
 
-  const apiKeyForm = useForm<z.infer<typeof apiKeySchema>>({
+  const apiKeyForm = useForm<ApiKeyFormValues>({
     resolver: zodResolver(apiKeySchema),
-    defaultValues: {
-      name: "",
-      domainId: "all",
-    },
+    defaultValues: DEFAULT_API_KEY_FORM_VALUES,
   });
 
-  function handleSave(values: z.infer<typeof apiKeySchema>) {
+  function handleSave(values: ApiKeyFormValues) {
     createApiKeyMutation.mutate(
-      {
-        name: values.name,
-        permission: "FULL",
-        domainId:
-          values.domainId === "all" ? undefined : Number(values.domainId),
-      },
+      toCreateApiKeyInput(values),
       {
         onSuccess: (data) => {
           utils.apiKey.invalidate();
@@ -195,6 +185,39 @@ export default function AddApiKey() {
                 />
                 <FormField
                   control={apiKeyForm.control}
+                  name="permission"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Permission</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select permission" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="SENDING">
+                            Sending only
+                          </SelectItem>
+                          <SelectItem value="FULL">
+                            Full API access
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Use Sending only for application/project keys. Full API
+                        access can manage domains, contacts, campaigns and
+                        analytics and should be reserved for trusted admin
+                        automation.
+                      </FormDescription>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={apiKeyForm.control}
                   name="domainId"
                   render={({ field }) => (
                     <FormItem>
@@ -224,6 +247,8 @@ export default function AddApiKey() {
                       </Select>
                       <FormDescription>
                         Choose which domain this API key can send emails from.
+                        For project keys, prefer a single domain so a leaked
+                        credential cannot send from other projects.
                       </FormDescription>
                     </FormItem>
                   )}

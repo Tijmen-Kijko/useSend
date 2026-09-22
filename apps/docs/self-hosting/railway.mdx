@@ -27,7 +27,7 @@ useSend depends on AWS SES to send emails and SNS to receive email status. The R
 
 <Steps>
   <Step title="AWS credentials">
-  tl;dr: In the AWS Console, create a new IAM user with programmatic access. Attach `AmazonSNSFullAccess` and `AmazonSESFullAccess`. Then create an access key.
+  Create a dedicated least-privilege IAM identity for useSend. Do not use root/admin credentials or the broad `AmazonSNSFullAccess` / `AmazonSESFullAccess` managed policies.
 
 Add the following environment variables in Railway.
 
@@ -37,8 +37,8 @@ AWS_SECRET_ACCESS_KEY=<secret-access-key>
 ```
 
 <Tip>
-  Follow this for detailed steps: [Create AWS
-  credentials](/get-started/create-aws-credentials)
+  Follow the [least-privilege AWS credential guide](/get-started/create-aws-credentials)
+  for the exact action list and rotation procedure.
 </Tip>
   </Step>
 
