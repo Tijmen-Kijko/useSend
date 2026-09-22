@@ -27,9 +27,13 @@ def main() -> None:
         "migrate status",
         "migrate deploy",
         "USESEND_MIGRATION_BACKUP_REF",
+        "USESEND_MIGRATION_BACKUP_RECEIPT",
         "USESEND_MIGRATION_COMPATIBILITY",
         "backward-compatible",
         "roll-forward-only",
+        "pre-migration",
+        "verified_at_epoch",
+        "86400",
     )
     for marker in required_migration_markers:
         if marker not in migrate:
@@ -40,6 +44,15 @@ def main() -> None:
 
     if "COPY ./docker/migrate.sh ./migrate.sh" not in dockerfile:
         fail("docker/Dockerfile must copy the explicit migration command")
+
+    if "COPY --from=installer /prisma-cli /prisma-cli" not in dockerfile:
+        fail("docker/Dockerfile must bundle the self-contained Prisma CLI runtime")
+
+    if "pnpm add --prod --save-exact \"prisma@$PRISMA_VERSION\"" not in dockerfile:
+        fail("docker/Dockerfile must install the exact resolved Prisma CLI version")
+
+    if "/prisma-cli/node_modules/.bin/prisma" not in migrate:
+        fail("docker/migrate.sh must use the bundled self-contained Prisma CLI")
 
     print("Kijko UseSend migration contract: OK")
 

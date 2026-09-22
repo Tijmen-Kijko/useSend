@@ -112,11 +112,14 @@ set -a
 set +a
 python3 docker/kijko/validate_compose.py
 python3 docker/kijko/validate_migration_contract.py
+python3 docker/kijko/validate_backup_contract.py
 ```
 
 When the candidate contains database migrations, complete
-`docker/kijko/MIGRATIONS.md` first. That runbook deliberately separates backup,
-migration, and application rollout; a failed migration must not start the new
+`docker/kijko/BACKUPS.md` and `docker/kijko/MIGRATIONS.md` first. The backup
+runbook creates and independently restore-verifies the exact pre-migration
+Restic snapshot; the migration runbook consumes its receipt. A failed backup,
+failed/stale restore verification, or failed migration must not start the new
 application. After the migration gate has passed when applicable, pull and roll
 out the exact digest:
 

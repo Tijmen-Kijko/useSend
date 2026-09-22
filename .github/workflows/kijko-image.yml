@@ -32,6 +32,11 @@ jobs:
       - name: Checkout exact commit
         uses: actions/checkout@v4
 
+      - name: Validate database safety contracts
+        run: |
+          python3 docker/kijko/validate_migration_contract.py
+          python3 docker/kijko/validate_backup_contract.py
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

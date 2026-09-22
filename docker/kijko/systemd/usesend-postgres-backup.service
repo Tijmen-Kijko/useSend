@@ -1,0 +1,13 @@
+[Unit]
+Description=UseSend PostgreSQL encrypted off-host backup
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+Environment=USESEND_BACKUP_ENV=/etc/usesend/backup.env
+ExecStart=/usr/local/sbin/usesend-postgres-backup scheduled
+TimeoutStartSec=2h

@@ -64,7 +64,11 @@ validate that application startup cannot silently regain migration behaviour:
 
 ```bash
 python3 docker/kijko/validate_migration_contract.py
+python3 docker/kijko/validate_backup_contract.py
 ```
+
+PostgreSQL backup, retention, restore verification, recovery objectives, and the
+migration backup receipt are defined in `BACKUPS.md`.
 
 ## Start
 
@@ -73,9 +77,10 @@ compatibility, failure, and recovery procedures are defined in `MIGRATIONS.md`.
 Image publication, digest promotion, and image rollback policy are defined in
 `RELEASES.md`.
 
-> First production initialization and any migration-bearing release remain
-> blocked until USESEND-12 provides the required PostgreSQL backup and verified
-> restore gate. Do not bypass that dependency by inventing a backup reference.
+For any migration-bearing release, complete the pre-migration backup and
+isolated restore-verification gate in `BACKUPS.md` before `migrate.sh deploy`.
+The migration command validates the matching root-only receipt and rejects stale
+or unverified backup references.
 
 Once the database is initialized/migrated through the controlled procedure:
 
@@ -97,7 +102,8 @@ USESEND-3/USESEND-15.
 - container images/logs: Docker root filesystem
 
 Docker named volumes are deliberately not used for these two stateful services.
-Backup/restore and queue-loss recovery are handled by USESEND-12/USESEND-13.
+PostgreSQL off-host backup and restore verification are defined in
+`BACKUPS.md`; Redis queue-loss recovery remains tracked by USESEND-13.
 
 ## Logging
 
