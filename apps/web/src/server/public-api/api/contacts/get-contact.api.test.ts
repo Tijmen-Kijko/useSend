@@ -3,9 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { mockGetTeamFromToken, mockRedis, mockDb } = vi.hoisted(() => ({
   mockGetTeamFromToken: vi.fn(),
   mockRedis: {
-    incr: vi.fn(),
-    expire: vi.fn(),
-    ttl: vi.fn(),
+    eval: vi.fn(),
   },
   mockDb: {
     contactBook: {
@@ -40,9 +38,7 @@ import getContact from "~/server/public-api/api/contacts/get-contact";
 describe("GET /v1/contactBooks/{contactBookId}/contacts/{contactId}", () => {
   beforeEach(() => {
     mockGetTeamFromToken.mockReset();
-    mockRedis.incr.mockReset();
-    mockRedis.expire.mockReset();
-    mockRedis.ttl.mockReset();
+    mockRedis.eval.mockReset();
     mockDb.contactBook.findUnique.mockReset();
     mockDb.contact.findFirst.mockReset();
 
@@ -53,9 +49,7 @@ describe("GET /v1/contactBooks/{contactBookId}/contacts/{contactId}", () => {
       apiKey: { domainId: null, permission: "FULL" },
     });
 
-    mockRedis.incr.mockResolvedValue(1);
-    mockRedis.expire.mockResolvedValue(1);
-    mockRedis.ttl.mockResolvedValue(1);
+    mockRedis.eval.mockResolvedValue([1, 1]);
 
     mockDb.contactBook.findUnique.mockResolvedValue({
       id: "cb_team_1",

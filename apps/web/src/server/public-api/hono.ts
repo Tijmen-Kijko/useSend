@@ -10,6 +10,7 @@ import { UnsendApiError } from "./api-error";
 import { ApiPermission, Team } from "@prisma/client";
 import { logger } from "../logger/log";
 import { isApiKeyAuthorized } from "./api-key-authorization";
+import { consumeFixedWindowRateLimit } from "~/server/rate-limit";
 
 // Define AppEnv for Hono context
 export type AppEnv = {
@@ -84,15 +85,15 @@ export function getApp() {
     await next();
   });
 
-  // Custom Rate Limiter Middleware
+  // Fixed-window API rate limiter. In self-hosted mode, the limit comes
+  // from API_RATE_LIMIT; cloud mode keeps the team-specific limit. The key is
+  // per API credential so multiple projects in one self-hosted Team do not
+  // consume each other's quota.
   const RATE_LIMIT_WINDOW_SECONDS = 1;
 
   app.use("*", async (c: Context<AppEnv>, next: Next) => {
-    // Skip for self-hosted, or if team is not set (e.g. for public/doc paths not caught earlier)
-    // or if the path is one of the explicitly skipped paths for auth.
     if (
-      isSelfHosted() ||
-      !c.var.team || // Team should be set by auth middleware for protected routes
+      !c.var.team ||
       c.req.path.startsWith("/api/v1/doc") ||
       c.req.path.startsWith("/api/v1/ui") ||
       c.req.path === "/api/health"
@@ -101,48 +102,62 @@ export function getApp() {
     }
 
     const team = c.var.team;
-    const limit = team.apiRateLimit ?? 2; // Default limit from your previous setup
-    const key = redisKey(`rl:${team.id}`); // Rate limit key for Redis
+    const limit = isSelfHosted()
+      ? env.API_RATE_LIMIT
+      : (team.apiRateLimit ?? env.API_RATE_LIMIT);
+    const key = redisKey(`rl:api-key:${team.apiKeyId}`);
     const redis = getRedis();
 
-    let currentRequests: number;
-    let ttl: number;
-
+    let rateLimit;
     try {
-      // Increment the key. If the key does not exist, it is created and set to 1.
-      currentRequests = await redis.incr(key);
-
-      if (currentRequests === 1) {
-        // This is the first request in the window, set the expiry.
-        await redis.expire(key, RATE_LIMIT_WINDOW_SECONDS);
-      }
-      // Get the TTL (time to live) of the key to know when it resets.
-      // If the key does not exist or has no expiry, TTL returns -1 or -2.
-      // We rely on expire being set for new keys.
-      ttl = await redis.ttl(key);
+      rateLimit = await consumeFixedWindowRateLimit({
+        redis,
+        key,
+        limit,
+        windowSeconds: RATE_LIMIT_WINDOW_SECONDS,
+      });
     } catch (error) {
-      logger.error({ err: error }, "Redis error during rate limiting");
-      // Alternatively, you could fail closed by throwing an error here.
-      return next();
+      logger.error(
+        {
+          err: error,
+          teamId: team.id,
+          apiKeyId: team.apiKeyId,
+        },
+        "API rate limiter unavailable",
+      );
+      throw new UnsendApiError({
+        code: "SERVICE_UNAVAILABLE",
+        message: "API rate limiter is temporarily unavailable",
+      });
     }
 
-    const resetTime =
-      Math.floor(Date.now() / 1000) +
-      (ttl > 0 ? ttl : RATE_LIMIT_WINDOW_SECONDS);
-    const remainingRequests = Math.max(0, limit - currentRequests);
-
     c.res.headers.set("X-RateLimit-Limit", String(limit));
-    c.res.headers.set("X-RateLimit-Remaining", String(remainingRequests));
-    c.res.headers.set("X-RateLimit-Reset", String(resetTime));
+    c.res.headers.set("X-RateLimit-Remaining", String(rateLimit.remaining));
+    c.res.headers.set(
+      "X-RateLimit-Reset",
+      String(rateLimit.resetAtUnixSeconds),
+    );
 
-    if (currentRequests > limit) {
+    if (!rateLimit.allowed) {
       c.res.headers.set(
         "Retry-After",
-        String(ttl > 0 ? ttl : RATE_LIMIT_WINDOW_SECONDS)
+        String(rateLimit.retryAfterSeconds),
+      );
+      logger.warn(
+        {
+          teamId: team.id,
+          apiKeyId: team.apiKeyId,
+          method: c.req.method,
+          path: c.req.path,
+          limit,
+          currentRequests: rateLimit.current,
+          retryAfterSeconds: rateLimit.retryAfterSeconds,
+        },
+        "API rate limit exceeded",
       );
       throw new UnsendApiError({
         code: "RATE_LIMITED",
-        message: `Rate limit exceeded. Try again in ${ttl > 0 ? ttl : RATE_LIMIT_WINDOW_SECONDS} seconds.`,
+        message: `Rate limit exceeded. Try again in ${rateLimit.retryAfterSeconds} seconds.`,
       });
     }
 

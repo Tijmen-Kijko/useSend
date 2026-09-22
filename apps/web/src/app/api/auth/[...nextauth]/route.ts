@@ -4,6 +4,7 @@ import { authOptions } from "~/server/auth";
 import { env } from "~/env";
 import { getRedis, redisKey } from "~/server/redis";
 import { logger } from "~/server/logger/log";
+import { consumeFixedWindowRateLimit } from "~/server/rate-limit";
 
 const handler = NextAuth(authOptions);
 
@@ -12,11 +13,11 @@ export { handler as GET };
 function getClientIp(req: Request): string | null {
   const h = req.headers;
   const direct =
+    h.get("cf-connecting-ip") ??
+    h.get("true-client-ip") ??
     h.get("x-forwarded-for") ??
     h.get("x-real-ip") ??
-    h.get("cf-connecting-ip") ??
     h.get("x-client-ip") ??
-    h.get("true-client-ip") ??
     h.get("fastly-client-ip") ??
     h.get("x-cluster-client-ip") ??
     null;
@@ -53,18 +54,30 @@ export async function POST(req: Request, ctx: any) {
   if (env.AUTH_EMAIL_RATE_LIMIT > 0) {
     const url = new URL(req.url);
     if (url.pathname.endsWith("/signin/email")) {
+      const ip = getClientIp(req);
+      if (!ip) {
+        logger.error("Auth email rate limit failed: missing client IP");
+        return Response.json(
+          {
+            error: {
+              code: "SERVICE_UNAVAILABLE",
+              message: "Authentication rate limiter is unavailable",
+            },
+          },
+          { status: 503 },
+        );
+      }
+
       try {
-        const ip = getClientIp(req);
-        if (!ip) {
-          logger.warn("Auth email rate limit skipped: missing client IP");
-          return handler(req, ctx);
-        }
         const redis = getRedis();
-        const key = redisKey(`auth-rl:${ip}`);
-        const ttl = 60;
-        const count = await redis.incr(key);
-        if (count === 1) await redis.expire(key, ttl);
-        if (count > env.AUTH_EMAIL_RATE_LIMIT) {
+        const rateLimit = await consumeFixedWindowRateLimit({
+          redis,
+          key: redisKey(`auth-rl:${ip}`),
+          limit: env.AUTH_EMAIL_RATE_LIMIT,
+          windowSeconds: 60,
+        });
+
+        if (!rateLimit.allowed) {
           logger.warn({ ip }, "Auth email rate limit exceeded");
           return Response.json(
             {
@@ -73,13 +86,31 @@ export async function POST(req: Request, ctx: any) {
                 message: "Too many requests",
               },
             },
-            { status: 429 }
+            {
+              status: 429,
+              headers: {
+                "Retry-After": String(rateLimit.retryAfterSeconds),
+                "X-RateLimit-Limit": String(env.AUTH_EMAIL_RATE_LIMIT),
+                "X-RateLimit-Remaining": String(rateLimit.remaining),
+                "X-RateLimit-Reset": String(rateLimit.resetAtUnixSeconds),
+              },
+            },
           );
         }
       } catch (error) {
         logger.error({ err: error }, "Auth email rate limit failed");
+        return Response.json(
+          {
+            error: {
+              code: "SERVICE_UNAVAILABLE",
+              message: "Authentication rate limiter is unavailable",
+            },
+          },
+          { status: 503 },
+        );
       }
     }
   }
+
   return handler(req, ctx);
 }
