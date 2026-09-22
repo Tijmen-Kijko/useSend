@@ -59,16 +59,25 @@ docker compose \
 
 The configuration intentionally requires explicit image references. The UseSend
 application reference must be the canonical OCI digest defined in `RELEASES.md`;
-`validate_compose.py` rejects tag-based UseSend production references.
+`validate_compose.py` rejects tag-based UseSend production references. Also
+validate that application startup cannot silently regain migration behaviour:
+
+```bash
+python3 docker/kijko/validate_migration_contract.py
+```
 
 ## Start
 
-> Production start remains gated by USESEND-11 (controlled Prisma migrations).
-> Image publication, digest promotion, and rollback policy are defined in
-> `RELEASES.md`. The current image still runs `prisma migrate deploy` during
-> container startup until USESEND-11 changes that behavior.
+Application startup no longer runs Prisma migrations. Controlled migration,
+compatibility, failure, and recovery procedures are defined in `MIGRATIONS.md`.
+Image publication, digest promotion, and image rollback policy are defined in
+`RELEASES.md`.
 
-Once those gates are closed:
+> First production initialization and any migration-bearing release remain
+> blocked until USESEND-12 provides the required PostgreSQL backup and verified
+> restore gate. Do not bypass that dependency by inventing a backup reference.
+
+Once the database is initialized/migrated through the controlled procedure:
 
 ```bash
 docker compose \
