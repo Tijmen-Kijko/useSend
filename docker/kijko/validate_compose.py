@@ -8,6 +8,7 @@ never starts containers; it only renders and inspects the Compose model.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -47,6 +48,17 @@ def main() -> None:
         fail(
             f"expected services {sorted(expected_services)}, "
             f"got {sorted(services)}"
+        )
+
+    usesend_image = services["usesend"].get("image", "")
+    immutable_image = re.fullmatch(
+        r"ghcr\.io/tijmen-kijko/usesend@sha256:[0-9a-f]{64}",
+        usesend_image,
+    )
+    if immutable_image is None:
+        fail(
+            "usesend image must be the canonical digest-pinned "
+            "ghcr.io/tijmen-kijko/usesend@sha256:<digest> reference"
         )
 
     for service_name in ("postgres", "redis"):

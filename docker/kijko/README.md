@@ -57,14 +57,16 @@ docker compose \
   config --quiet
 ```
 
-The configuration intentionally requires explicit image references. USESEND-10
-will define the immutable image/tag/digest promotion policy.
+The configuration intentionally requires explicit image references. The UseSend
+application reference must be the canonical OCI digest defined in `RELEASES.md`;
+`validate_compose.py` rejects tag-based UseSend production references.
 
 ## Start
 
-> Production start remains gated by USESEND-10 (image pinning) and USESEND-11
-> (controlled Prisma migrations). The current upstream image still runs
-> `prisma migrate deploy` during container startup.
+> Production start remains gated by USESEND-11 (controlled Prisma migrations).
+> Image publication, digest promotion, and rollback policy are defined in
+> `RELEASES.md`. The current image still runs `prisma migrate deploy` during
+> container startup until USESEND-11 changes that behavior.
 
 Once those gates are closed:
 
