@@ -1,6 +1,10 @@
 import { ApiPermission } from "@prisma/client";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { addApiKey, getTeamAndApiKey } from "~/server/service/api-service";
+import {
+  addApiKey,
+  deleteApiKey,
+  getTeamAndApiKey,
+} from "~/server/service/api-service";
 import { createTeam } from "~/test/factories/core";
 import {
   closeIntegrationConnections,
@@ -36,6 +40,23 @@ describeIntegration("api-service integration", () => {
 
     expect(result?.team?.id).toBe(team.id);
     expect(result?.apiKey.name).toBe("primary");
+  });
+
+  it("rejects a revoked API key", async () => {
+    const team = await createTeam({ name: "Revocation Team" });
+
+    const apiKey = await addApiKey({
+      name: "revoked",
+      permission: ApiPermission.SENDING,
+      teamId: team.id,
+    });
+
+    const persisted = await getTeamAndApiKey(apiKey);
+    expect(persisted?.apiKey.id).toBeDefined();
+
+    await deleteApiKey(persisted!.apiKey.id);
+
+    await expect(getTeamAndApiKey(apiKey)).resolves.toBeNull();
   });
 
   it("rejects domain-restricted key when domain does not belong to team", async () => {

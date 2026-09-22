@@ -34,9 +34,9 @@ describeIntegration("Hono public API integration", () => {
     });
 
     const app = getApp();
-    app.get("/v1/ping", (c) => c.json({ teamId: c.var.team.id }));
+    app.get("/v1/emails", (c) => c.json({ teamId: c.var.team.id }));
 
-    const response = await app.request("http://localhost/api/v1/ping", {
+    const response = await app.request("http://localhost/api/v1/emails", {
       headers: {
         Authorization: `Bearer ${apiKey}`,
       },
@@ -48,9 +48,9 @@ describeIntegration("Hono public API integration", () => {
 
   it("returns forbidden when API key is invalid", async () => {
     const app = getApp();
-    app.get("/v1/ping", (c) => c.json({ ok: true }));
+    app.get("/v1/emails", (c) => c.json({ ok: true }));
 
-    const response = await app.request("http://localhost/api/v1/ping", {
+    const response = await app.request("http://localhost/api/v1/emails", {
       headers: {
         Authorization: "Bearer us_bad_token",
       },
@@ -76,14 +76,14 @@ describeIntegration("Hono public API integration", () => {
     });
 
     const app = getApp();
-    app.get("/v1/ping", (c) => c.json({ ok: true }));
+    app.get("/v1/emails", (c) => c.json({ ok: true }));
 
-    const first = await app.request("http://localhost/api/v1/ping", {
+    const first = await app.request("http://localhost/api/v1/emails", {
       headers: {
         Authorization: `Bearer ${apiKey}`,
       },
     });
-    const second = await app.request("http://localhost/api/v1/ping", {
+    const second = await app.request("http://localhost/api/v1/emails", {
       headers: {
         Authorization: `Bearer ${apiKey}`,
       },

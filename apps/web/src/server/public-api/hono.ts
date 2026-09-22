@@ -7,13 +7,20 @@ import { getRedis, redisKey } from "~/server/redis";
 import { getTeamFromToken } from "~/server/public-api/auth";
 import { isSelfHosted } from "~/utils/common";
 import { UnsendApiError } from "./api-error";
-import { Team, ApiKey } from "@prisma/client";
+import { ApiPermission, Team } from "@prisma/client";
 import { logger } from "../logger/log";
+import { isApiKeyAuthorized } from "./api-key-authorization";
 
 // Define AppEnv for Hono context
 export type AppEnv = {
   Variables: {
-    team: Team & { apiKeyId: number; apiKey: { domainId: number | null } };
+    team: Team & {
+      apiKeyId: number;
+      apiKey: {
+        domainId: number | null;
+        permission: ApiPermission;
+      };
+    };
   };
 };
 
@@ -45,6 +52,35 @@ export function getApp() {
         message: "Authentication failed",
       });
     }
+    await next();
+  });
+
+  // Authorization middleware. Protected public API routes are default-deny
+  // until they are explicitly included in the permission matrix.
+  app.use("*", async (c: Context<AppEnv>, next: Next) => {
+    if (
+      c.req.path.startsWith("/api/v1/doc") ||
+      c.req.path.startsWith("/api/v1/ui") ||
+      c.req.path === "/api/health"
+    ) {
+      return next();
+    }
+
+    const team = c.var.team;
+    if (
+      !team ||
+      !isApiKeyAuthorized({
+        permission: team.apiKey.permission,
+        method: c.req.method,
+        path: c.req.path,
+      })
+    ) {
+      throw new UnsendApiError({
+        code: "FORBIDDEN",
+        message: "API key does not have permission for this endpoint",
+      });
+    }
+
     await next();
   });
 
@@ -114,7 +150,7 @@ export function getApp() {
   });
 
   // The OpenAPI documentation will be available at /doc
-  app.doc("/v1/doc", (c) => ({
+  app.doc("/v1/doc", () => ({
     openapi: "3.0.0",
     info: {
       version: "1.0.0",

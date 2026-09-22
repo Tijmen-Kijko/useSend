@@ -2,7 +2,6 @@ import { Context } from "hono";
 import { db } from "../db";
 import { UnsendApiError } from "./api-error";
 import { getTeamAndApiKey } from "../service/api-service";
-import { isSelfHosted } from "~/utils/common";
 import { logger } from "../logger/log";
 
 /**
@@ -59,5 +58,12 @@ export const getTeamFromToken = async (c: Context) => {
       logger.error({ err }, "Failed to update lastUsed on API key")
     );
 
-  return { ...team, apiKeyId: apiKey.id, apiKey: { domainId: apiKey.domainId } };
+  return {
+    ...team,
+    apiKeyId: apiKey.id,
+    apiKey: {
+      domainId: apiKey.domainId,
+      permission: apiKey.permission,
+    },
+  };
 };

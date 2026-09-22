@@ -50,7 +50,7 @@ describe("GET /v1/contactBooks/{contactBookId}/contacts/{contactId}", () => {
       id: 1,
       apiRateLimit: 20,
       apiKeyId: 11,
-      apiKey: { domainId: null },
+      apiKey: { domainId: null, permission: "FULL" },
     });
 
     mockRedis.incr.mockResolvedValue(1);
