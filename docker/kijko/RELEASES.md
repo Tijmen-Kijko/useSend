@@ -67,8 +67,8 @@ Classify the release as either:
 
 - **No database migration:** application rollout may proceed after the normal
   pre-production gate.
-- **Database migration required:** follow the controlled migration procedure
-  defined for USESEND-11 before replacing the application container.
+- **Database migration required:** follow the controlled migration procedure in
+  `docker/kijko/MIGRATIONS.md` before replacing the application container.
 
 For a migration release, review at least:
 
@@ -111,10 +111,14 @@ set -a
 . /etc/usesend/production.env
 set +a
 python3 docker/kijko/validate_compose.py
+python3 docker/kijko/validate_migration_contract.py
 ```
 
-After USESEND-11's migration gate has been completed when applicable, pull and
-roll out the exact digest:
+When the candidate contains database migrations, complete
+`docker/kijko/MIGRATIONS.md` first. That runbook deliberately separates backup,
+migration, and application rollout; a failed migration must not start the new
+application. After the migration gate has passed when applicable, pull and roll
+out the exact digest:
 
 ```bash
 docker compose \
