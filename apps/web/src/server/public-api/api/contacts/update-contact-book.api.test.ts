@@ -5,9 +5,7 @@ const { mockGetTeamFromToken, mockRedis, mockDb, mockUpdateContactBook } =
   vi.hoisted(() => ({
     mockGetTeamFromToken: vi.fn(),
     mockRedis: {
-      incr: vi.fn(),
-      expire: vi.fn(),
-      ttl: vi.fn(),
+      eval: vi.fn(),
     },
     mockDb: {
       contactBook: {
@@ -61,9 +59,7 @@ function buildContactBook(overrides?: Record<string, unknown>) {
 describe("PATCH /v1/contactBooks/{contactBookId}", () => {
   beforeEach(() => {
     mockGetTeamFromToken.mockReset();
-    mockRedis.incr.mockReset();
-    mockRedis.expire.mockReset();
-    mockRedis.ttl.mockReset();
+    mockRedis.eval.mockReset();
     mockDb.contactBook.findUnique.mockReset();
     mockUpdateContactBook.mockReset();
 
@@ -74,9 +70,7 @@ describe("PATCH /v1/contactBooks/{contactBookId}", () => {
       apiKey: { domainId: null, permission: "FULL" },
     });
 
-    mockRedis.incr.mockResolvedValue(1);
-    mockRedis.expire.mockResolvedValue(1);
-    mockRedis.ttl.mockResolvedValue(1);
+    mockRedis.eval.mockResolvedValue([1, 1]);
 
     mockDb.contactBook.findUnique.mockResolvedValue({
       id: "cb_1",

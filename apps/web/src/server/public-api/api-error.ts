@@ -11,6 +11,7 @@ const ErrorCode = z.enum([
   "NOT_FOUND",
   "NOT_UNIQUE",
   "RATE_LIMITED",
+  "SERVICE_UNAVAILABLE",
   "UNAUTHORIZED",
   "METHOD_NOT_ALLOWED",
 ]);
@@ -31,6 +32,8 @@ function codeToStatus(code: z.infer<typeof ErrorCode>): ContentfulStatusCode {
       return 409;
     case "RATE_LIMITED":
       return 429;
+    case "SERVICE_UNAVAILABLE":
+      return 503;
     case "INTERNAL_SERVER_ERROR":
       return 500;
   }
@@ -52,6 +55,8 @@ function statusToCode(status: StatusCode): z.infer<typeof ErrorCode> {
       return "NOT_UNIQUE";
     case 429:
       return "RATE_LIMITED";
+    case 503:
+      return "SERVICE_UNAVAILABLE";
     case 500:
       return "INTERNAL_SERVER_ERROR";
     default:

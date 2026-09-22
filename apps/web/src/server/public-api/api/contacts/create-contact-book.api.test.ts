@@ -11,9 +11,7 @@ const {
 } = vi.hoisted(() => ({
   mockGetTeamFromToken: vi.fn(),
   mockRedis: {
-    incr: vi.fn(),
-    expire: vi.fn(),
-    ttl: vi.fn(),
+    eval: vi.fn(),
   },
   mockDb: {
     $transaction: vi.fn(),
@@ -71,9 +69,7 @@ function buildContactBook(overrides?: Record<string, unknown>) {
 describe("POST /v1/contactBooks", () => {
   beforeEach(() => {
     mockGetTeamFromToken.mockReset();
-    mockRedis.incr.mockReset();
-    mockRedis.expire.mockReset();
-    mockRedis.ttl.mockReset();
+    mockRedis.eval.mockReset();
     mockDb.$transaction.mockReset();
     mockCreateContactBook.mockReset();
     mockUpdateContactBook.mockReset();
@@ -85,9 +81,7 @@ describe("POST /v1/contactBooks", () => {
       apiKey: { domainId: null, permission: "FULL" },
     });
 
-    mockRedis.incr.mockResolvedValue(1);
-    mockRedis.expire.mockResolvedValue(1);
-    mockRedis.ttl.mockResolvedValue(1);
+    mockRedis.eval.mockResolvedValue([1, 1]);
 
     mockDb.$transaction.mockImplementation(async (callback: any) =>
       callback(mockTransactionClient),
