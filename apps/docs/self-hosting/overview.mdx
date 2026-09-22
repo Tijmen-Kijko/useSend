@@ -49,7 +49,42 @@ Add the following environment variables.
 ```env
 GITHUB_ID="<your-github-client-id>"
 GITHUB_SECRET="<your-github-client-secret>"
+
+# Recommended for self-hosted production.
+ADMIN_EMAIL="<primary-admin-email>"
+SELF_HOSTED_ALLOWED_EMAILS="<primary-admin-email>,<second-admin-email>"
 ```
+
+For self-hosted instances, `ADMIN_EMAIL` controls who may bootstrap an empty
+installation. Once the first account exists, all additional accounts still
+require a team invitation. When `SELF_HOSTED_ALLOWED_EMAILS` is configured,
+both existing and new dashboard users must also be present in that allowlist.
+Email matching is case-insensitive.
+
+Use `NEXTAUTH_URL=https://...` in production. useSend enables secure NextAuth
+cookies whenever the configured URL uses HTTPS.
+
+<Warning>
+Treat the allowlist and your identity-provider access policy as separate
+controls. If you place useSend behind an access proxy such as Cloudflare
+Access, keep the origin inaccessible except through that trusted proxy.
+</Warning>
+
+### Self-hosted access recovery
+
+If an authorized administrator loses dashboard access:
+
+1. Prefer restoring that existing administrator's email in both the access
+   proxy policy and `SELF_HOSTED_ALLOWED_EMAILS`, then restart useSend.
+2. If the database has no users yet, set `ADMIN_EMAIL` to the approved
+   recovery identity, include it in `SELF_HOSTED_ALLOWED_EMAILS`, and sign in
+   through the configured OAuth provider.
+3. If users already exist but no authorized identity remains, use controlled
+   database maintenance access to create a one-time team invitation for an
+   approved recovery email, add that email to the allowlist, sign in, and then
+   remove the temporary recovery access.
+4. If the lockout may be related to credential compromise, rotate the OAuth
+   client secret and `NEXTAUTH_SECRET` after access is restored.
 
   <Info>If you want email/password login, please help us out with the [code](https://github.com/usesend/usesend) </Info>  
   </Step>

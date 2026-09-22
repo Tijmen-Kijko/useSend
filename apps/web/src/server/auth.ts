@@ -30,9 +30,56 @@ const SELF_HOSTED_REGISTRATION_LOCK_ID = 1431520590;
 
 export class SelfHostedRegistrationError extends Error {
   constructor() {
-    super("A team invitation is required to create an account");
+    super("This account is not permitted to register in this self-hosted instance");
     this.name = "SelfHostedRegistrationError";
   }
+}
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function getSelfHostedAllowedEmails() {
+  const configured = env.SELF_HOSTED_ALLOWED_EMAILS?.trim();
+  if (!configured) {
+    return null;
+  }
+
+  const emails = new Set(
+    configured
+      .split(",")
+      .map(normalizeEmail)
+      .filter(Boolean),
+  );
+
+  return emails.size > 0 ? emails : null;
+}
+
+export function isSelfHostedEmailAllowed(email?: string | null) {
+  const allowedEmails = getSelfHostedAllowedEmails();
+  if (!allowedEmails) {
+    return true;
+  }
+
+  return Boolean(email && allowedEmails.has(normalizeEmail(email)));
+}
+
+function canBootstrapSelfHostedUser(email?: string | null) {
+  if (env.ADMIN_EMAIL) {
+    return Boolean(
+      email &&
+        normalizeEmail(email) === normalizeEmail(env.ADMIN_EMAIL) &&
+        isSelfHostedEmailAllowed(email),
+    );
+  }
+
+  const allowedEmails = getSelfHostedAllowedEmails();
+  if (allowedEmails) {
+    return Boolean(email && allowedEmails.has(normalizeEmail(email)));
+  }
+
+  // Preserve upstream self-hosted behavior when no explicit restrictions are configured.
+  return true;
 }
 
 export async function canRegisterSelfHostedUser(
@@ -51,15 +98,24 @@ export async function canRegisterSelfHostedUser(
           providerAccountId: account.providerAccountId,
         },
       },
-      select: { id: true },
+      select: {
+        id: true,
+        user: {
+          select: { email: true },
+        },
+      },
     });
 
     if (existingAccount) {
-      return true;
+      return isSelfHostedEmailAllowed(existingAccount.user.email);
     }
   }
 
   if (email) {
+    if (!isSelfHostedEmailAllowed(email)) {
+      return false;
+    }
+
     const existingUser = await db.user.findUnique({
       where: { email },
       select: { id: true },
@@ -74,9 +130,10 @@ export async function canRegisterSelfHostedUser(
     select: { id: true },
   });
 
-  // An empty installation always allows its bootstrap account.
+  // An explicitly configured admin controls bootstrap of an empty
+  // installation. Without explicit restrictions we preserve upstream behavior.
   if (!registeredUser) {
-    return true;
+    return canBootstrapSelfHostedUser(email);
   }
 
   if (!email) {
@@ -180,6 +237,7 @@ function getProviders() {
  * @see https://next-auth.js.org/configuration/options
  */
 export const authOptions: NextAuthOptions = {
+  useSecureCookies: env.NEXTAUTH_URL.startsWith("https://"),
   callbacks: {
     signIn: async ({ user, account }) =>
       canRegisterSelfHostedUser(user.email, account),
@@ -189,7 +247,11 @@ export const authOptions: NextAuthOptions = {
         ...session.user,
         id: user.id,
         isBetaUser: user.isBetaUser,
-        isAdmin: user.email === env.ADMIN_EMAIL,
+        isAdmin: Boolean(
+          user.email &&
+            env.ADMIN_EMAIL &&
+            normalizeEmail(user.email) === normalizeEmail(env.ADMIN_EMAIL),
+        ),
         isWaitlisted: user.isWaitlisted,
       },
     }),
@@ -218,7 +280,15 @@ export const authOptions: NextAuthOptions = {
             select: { id: true },
           });
 
-          if (registeredUser) {
+          if (!isSelfHostedEmailAllowed(user.email)) {
+            throw new SelfHostedRegistrationError();
+          }
+
+          if (!registeredUser) {
+            if (!canBootstrapSelfHostedUser(user.email)) {
+              throw new SelfHostedRegistrationError();
+            }
+          } else {
             if (!user.email) {
               throw new SelfHostedRegistrationError();
             }
