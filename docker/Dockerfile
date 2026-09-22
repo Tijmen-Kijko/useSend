@@ -48,6 +48,11 @@ ENV NEXT_PUBLIC_GIT_SHA=$GIT_SHA
 # Build the project
 COPY --from=builder /app/out/full/ .
 
+# NextAuth options are evaluated while Next.js collects route data. Validation is
+# intentionally skipped in Docker builds, so provide a non-secret build-only URL.
+# This installer-stage ENV is not inherited by the final runner stage.
+ENV NEXTAUTH_URL=http://localhost:3000
+
 RUN pnpm turbo run build --filter=web...
 
 FROM base AS runner
