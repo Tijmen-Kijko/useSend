@@ -55,6 +55,8 @@ export const env = createEnv({
     FROM_EMAIL: z.string().optional(),
     ADMIN_EMAIL: z.string().optional(),
     SELF_HOSTED_ALLOWED_EMAILS: z.string().optional(),
+    CLOUDFLARE_ACCESS_TEAM_DOMAIN: z.string().url().optional(),
+    CLOUDFLARE_ACCESS_AUD: z.string().min(1).optional(),
     FOUNDER_EMAIL: z.string().optional(),
     DISCORD_WEBHOOK_URL: z.string().optional(),
     REDIS_URL: z.string(),
@@ -73,9 +75,9 @@ export const env = createEnv({
     SMTP_USER: z.string().default("usesend"),
     CONTACT_BOOK_ID: z.string().optional(),
     EMAIL_CLEANUP_DAYS: z
-        .string()
-        .optional()
-        .transform((str) => (str ? parseInt(str, 10) : undefined)),
+      .string()
+      .optional()
+      .transform((str) => (str ? parseInt(str, 10) : undefined)),
   },
 
   /**
@@ -104,8 +106,10 @@ export const env = createEnv({
     NEXTAUTH_URL: process.env.NEXTAUTH_URL,
     GITHUB_ID: process.env.GITHUB_ID,
     GITHUB_SECRET: process.env.GITHUB_SECRET,
-    AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY,
-    AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_KEY,
+    AWS_ACCESS_KEY_ID:
+      process.env.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY,
+    AWS_SECRET_ACCESS_KEY:
+      process.env.AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_KEY,
     USESEND_API_KEY: process.env.USESEND_API_KEY,
     UNSEND_API_KEY: process.env.UNSEND_API_KEY,
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
@@ -120,6 +124,8 @@ export const env = createEnv({
     NEXT_PUBLIC_GIT_SHA: process.env.NEXT_PUBLIC_GIT_SHA,
     ADMIN_EMAIL: process.env.ADMIN_EMAIL,
     SELF_HOSTED_ALLOWED_EMAILS: process.env.SELF_HOSTED_ALLOWED_EMAILS,
+    CLOUDFLARE_ACCESS_TEAM_DOMAIN: process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN,
+    CLOUDFLARE_ACCESS_AUD: process.env.CLOUDFLARE_ACCESS_AUD,
     FOUNDER_EMAIL: process.env.FOUNDER_EMAIL,
     DISCORD_WEBHOOK_URL: process.env.DISCORD_WEBHOOK_URL,
     REDIS_URL: process.env.REDIS_URL,

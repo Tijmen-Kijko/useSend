@@ -27,15 +27,15 @@ export const DashboardProvider = ({
     return <FullScreenLoading />;
   }
 
+  if (!teams || teams.length === 0) {
+    return <CreateTeam />;
+  }
+
   if (
     settings?.length === 0 &&
     (!env.NEXT_PUBLIC_IS_CLOUD || session?.user.isAdmin)
   ) {
     return <AddSesSettings />;
-  }
-
-  if (!teams || teams.length === 0) {
-    return <CreateTeam />;
   }
 
   return <TeamProvider>{children}</TeamProvider>;
