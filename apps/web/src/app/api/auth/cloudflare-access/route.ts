@@ -109,9 +109,14 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  const callbackPath = safeCallbackPath(
-    request.nextUrl.searchParams.get("callbackUrl"),
-  );
+  const pendingInvite = await db.teamInvite.findFirst({
+    where: { email },
+    select: { id: true },
+  });
+
+  const callbackPath = pendingInvite
+    ? `/join-team?inviteId=${encodeURIComponent(pendingInvite.id)}`
+    : safeCallbackPath(request.nextUrl.searchParams.get("callbackUrl"));
   const response = NextResponse.redirect(
     new URL(callbackPath, env.NEXTAUTH_URL),
   );
